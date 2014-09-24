@@ -37,8 +37,10 @@ import cytargetlinker.conversion.utils.CommonAttributes;
 public class TransmiR {
 
 	private static String transmiRUrl = "http://www.cuilab.cn/files/images/transmir/transmir_v1.2.txt";
-	private static String bridgedbMappingFile = "/home/martina/Data/BridgeDb/Hs_Derby_20130701.bridge";
-	private static String outputFile = "/home/martina/TransmiR-hsa-1.2.xgmml";
+	private static String bridgedbMappingFile = "/home/martina/Data/BridgeDb/Mm_Derby_20130701.bridge";
+	private static String outputFile = "/home/martina/TransmiR-mmu-1.2.xgmml";
+	private static String selectedOrganism = "mouse";
+	private static String organismCode = "mmu";
 	
 	public static void main(String[] args) {
 		URL url;
@@ -92,9 +94,10 @@ public class TransmiR {
 			String entrez = buffer[1];
 			String miRNA = buffer[3];
 			if(buffer.length > 9) {
+				String active = buffer[7];
 				String pubmed = buffer[8];
 				String organism = buffer[9];
-				if(organism.equals("human")) {
+				if(organism.equals(selectedOrganism)) {
 					Node source;
 					if(geneNodes.containsKey(entrez)) {
 						source = geneNodes.get(entrez);
@@ -105,18 +108,18 @@ public class TransmiR {
 					
 					
 					Node target;
-					if(miRNANodes.containsKey("hsa-" + miRNA)) {
-						target = miRNANodes.get("hsa-" + miRNA);
+					if(miRNANodes.containsKey(organismCode + "-" + miRNA)) {
+						target = miRNANodes.get(organismCode + "-" + miRNA);
 					} else {
-						target = graph.addNode("hsa-" + miRNA);
-						target.appendAttribute("identifiers", "[" + "hsa-" + miRNA + "]");
-						target.appendAttribute("label", "hsa-" + miRNA);
-						target.appendAttribute("name", "hsa-" + miRNA);
+						target = graph.addNode(organismCode + "-" + miRNA);
+						target.appendAttribute("identifiers", "[" + organismCode + "-" + miRNA + "]");
+						target.appendAttribute("label", organismCode + "-" + miRNA);
+						target.appendAttribute("name", organismCode + "-" + miRNA);
 						target.appendAttribute("biologicalType", "microRNA");
-						miRNANodes.put("hsa-" + miRNA, target);
+						miRNANodes.put(organismCode + "-" + miRNA, target);
 					}
 					
-					addEdge(source, target, graph, pubmed);
+					addEdge(source, target, graph, pubmed, active);
 				}
 			} else {
 				System.out.println("No organism specified for interaction " + entrez + " -> " + miRNA);
@@ -154,13 +157,14 @@ public class TransmiR {
 		return tf;
 	}
 	
-	private static void addEdge(Node source, Node target, Graph graph, String pubmed) {
+	private static void addEdge(Node source, Node target, Graph graph, String pubmed, String active) {
 		String id = source.getId() + "-" + target.getId();
 		if(!edges.contains(id)) {
 			Edge e = graph.addEdge(id, source, target);
 			e.setAttribute("datasource", "TransmiR v1.2");
 			e.setAttribute("interactionType", "TF-miRNA interaction");
 			e.setAttribute("pubmed", pubmed);
+			e.setAttribute("activity", active);
 		}
 	}
 
