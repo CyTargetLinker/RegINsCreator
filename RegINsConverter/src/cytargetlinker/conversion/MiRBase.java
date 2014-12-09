@@ -2,14 +2,18 @@ package cytargetlinker.conversion;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import cytargetlinker.conversion.graph.Graph;
 import cytargetlinker.conversion.graph.Graph.Edge;
@@ -22,17 +26,53 @@ public class MiRBase {
 	private static String mirbaseURL = "ftp://mirbase.org/pub/mirbase/CURRENT/genomes/hsa.gff3";
 	private static String outputFile = "/home/martina/mirbase-hsa-v21.xgmml";
 	private static String networkName = "miRBase v 21";
+	// you can use a biomart ensembl file to add links from immature to ensembl
+	// use this line to specify a biomart file
+//	private static String biomartFile = "/home/martina/Downloads/ensembl-mirna.txt";
+	// use this line if you don't want to add a mapping 
+	private static String biomartFile = "";
 	
 	public static void main(String[] args) throws Exception {
 		
 		MiRBase mirbase = new MiRBase();
 		URL url = new URL(mirbaseURL);
+		Map<String, Set<String>> ids = new HashMap<String, Set<String>>();
+		if(!biomartFile.equals("")) {
+			ids = readBiomartFile();
+		}
 		List<String> list = mirbase.readFile(url);
-		Graph graph = mirbase.convertGraph(list);
+		Graph graph = mirbase.convertGraph(list, ids);
 		mirbase.printGraph(graph);
 	}
 	
 	
+
+	private static Map<String, Set<String>> readBiomartFile() throws IOException {
+		Map<String, Set<String>> map = new HashMap<String, Set<String>>();
+		File f = new File(biomartFile);
+		BufferedReader reader = new BufferedReader(new FileReader(f));
+		String line;
+		while((line = reader.readLine()) != null) {
+			String [] buffer = line.split(",");
+			if(buffer.length > 1) {
+				String mirna = buffer[1];
+				String ensembl = buffer[0];
+				if(map.containsKey(mirna)) {
+					if(!map.get(mirna).contains(ensembl)) {
+						map.get(mirna).add(ensembl);
+					}
+				} else {
+					Set<String> set = new HashSet<String>();
+					set.add(ensembl);
+					map.put(mirna, set);
+				}
+			}
+		}
+		reader.close();
+		return map;
+	}
+
+
 
 	private Map<String, Node> genes;
 	private Map<String, Node> mirnas;
@@ -67,7 +107,7 @@ public class MiRBase {
 		return list;
 	}
 
-	public Graph convertGraph(List<String> list) {
+	public Graph convertGraph(List<String> list, Map<String, Set<String>> ids) {
 		Graph graph = new Graph();
 		graph.setTitle(networkName);
 		graph.setAttribute(CommonAttributes.DATABASE.getName(), networkName);
@@ -75,7 +115,7 @@ public class MiRBase {
 		for(String str : list) {
 			String [] buffer = str.split("\t");
 			if(buffer[2].equals("miRNA_primary_transcript")) {
-				addSourceNode(buffer[8], graph);		
+				addSourceNode(buffer[8], graph, ids);		
 			} else if(buffer[2].equals("miRNA")) {
 				addTargetNode(buffer[8], graph);
 			} 
@@ -123,7 +163,7 @@ public class MiRBase {
 		}
 	}
 	
-	private void addSourceNode(String details, Graph graph) {
+	private void addSourceNode(String details, Graph graph, Map<String, Set<String>> ids) {
 		String [] buffer2 = details.split(";");
 		
 		String mi = buffer2[0].substring(3);
@@ -131,13 +171,21 @@ public class MiRBase {
 		String name = buffer2[2].substring(5);
 		
 		if(!genes.containsKey(mi)) {
+			String identifiers = "[" + mi + "," + name;
+			if(ids.containsKey(mi)) {
+				for(String ensembl : ids.get(mi)) {
+					identifiers = identifiers + "," + ensembl;
+				}
+			}
+			identifiers = identifiers + "]";
+			System.out.println(identifiers);
 			Node source = graph.addNode(mi);
 			source.appendAttribute("miRBase id", mi);
 			source.appendAttribute("alias", alias);
 			source.appendAttribute("name", name);
 			source.appendAttribute("label", name);
 			source.appendAttribute("biologicalType", "gene");
-			source.appendAttribute("identifiers", "[" + mi + "," + name + "]");
+			source.appendAttribute("identifiers", identifiers);
 			genes.put(mi, source);
 		}
 	}
